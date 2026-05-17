@@ -11,6 +11,8 @@
   "dependencies": {
     "@clerk/nextjs": "^7.3.5",
     "@vercel/blob": "^2.3.3",
+    "framer-motion": "^12.38.0",
+    "geist": "^1.7.0",
     "lucide-react": "^1.16.0",
     "mongoose": "^9.6.2",
     "next": "16.2.6",

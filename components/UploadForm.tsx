@@ -5,7 +5,7 @@ import { upload } from '@vercel/blob/client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, CheckCircle, ChevronDown, ChevronRight, Dna, Layers, Zap } from 'lucide-react'
 
-const DESIGN_OPTIONS = [100, 500, 1000, 5000]
+const DESIGN_OPTIONS = [3, 10, 100, 500]
 
 type LoadingStep = 'uploading' | 'creating' | 'starting' | null
 
@@ -104,16 +104,24 @@ export default function UploadForm() {
       })
 
       setLoadingStep('creating')
-      const res = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pdbBlobUrl: blob.url,
-          pdbFileName: file.name,
-          designCount,
-          ...params,
-        }),
-      })
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 15_000)
+      let res: Response
+      try {
+        res = await fetch('/api/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pdbBlobUrl: blob.url,
+            pdbFileName: file.name,
+            designCount,
+            ...params,
+          }),
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timeout)
+      }
 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to start job')
@@ -353,6 +361,13 @@ export default function UploadForm() {
                       })}
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => { setLoadingStep(null); setError('') }}
+                    className="mt-3 text-xs text-zinc-600 hover:text-zinc-400 transition-colors w-full text-center"
+                  >
+                    Something stuck? Start over
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
