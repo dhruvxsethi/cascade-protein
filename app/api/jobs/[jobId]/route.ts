@@ -6,16 +6,18 @@ import { Design } from '@/models/Design'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const { jobId } = await params
+
   await connectDB()
-  const job = await Job.findOne({ _id: params.jobId, userId }).lean()
+  const job = await Job.findOne({ _id: jobId, userId }).lean()
   if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const designs = await Design.find({ jobId: params.jobId })
+  const designs = await Design.find({ jobId })
     .sort({ 'scores.plddt': -1 })
     .limit(100)
     .lean()

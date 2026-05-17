@@ -5,10 +5,11 @@ import { terminatePod } from '@/lib/runpod'
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const { jobId } = await params
   const callbackSecret = req.headers.get('x-callback-secret')
-  const expectedSecret = `${params.jobId}-${process.env.CRON_SECRET}`
+  const expectedSecret = `${jobId}-${process.env.CRON_SECRET}`
   if (callbackSecret !== expectedSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -17,11 +18,11 @@ export async function POST(
   const { stage, rfd3OutputUrl, mpnnOutputUrl, rfd3Count, mpnnCount, error } = body
 
   await connectDB()
-  const job = await Job.findById(params.jobId)
+  const job = await Job.findById(jobId)
   if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (stage === 'failed') {
-    await Job.findByIdAndUpdate(params.jobId, {
+    await Job.findByIdAndUpdate(jobId, {
       stage: 'failed',
       errorMessage: error ?? 'Pipeline failed on RunPod',
     })
@@ -32,7 +33,7 @@ export async function POST(
   }
 
   if (stage === 'mpnn_complete') {
-    await Job.findByIdAndUpdate(params.jobId, {
+    await Job.findByIdAndUpdate(jobId, {
       stage: 'af3',
       rfd3OutputBlobUrl: rfd3OutputUrl ?? null,
       mpnnOutputBlobUrl: mpnnOutputUrl ?? null,
