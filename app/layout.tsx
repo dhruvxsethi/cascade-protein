@@ -13,7 +13,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     const { ClerkProvider } = await import('@clerk/nextjs')
     return (
       <ClerkProvider>
-        <html lang="en">
+        <html lang="en" className="dark">
           <body className={inter.className}>{children}</body>
         </html>
       </ClerkProvider>
@@ -21,7 +21,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className={inter.className}>{children}</body>
     </html>
   )
