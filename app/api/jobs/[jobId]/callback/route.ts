@@ -7,6 +7,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { jobId: string } }
 ) {
+  const callbackSecret = req.headers.get('x-callback-secret')
+  const expectedSecret = `${params.jobId}-${process.env.CRON_SECRET}`
+  if (callbackSecret !== expectedSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const body = await req.json()
   const { stage, rfd3OutputUrl, mpnnOutputUrl, rfd3Count, mpnnCount, error } = body
 

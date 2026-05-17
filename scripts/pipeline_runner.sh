@@ -5,7 +5,7 @@
 #   SAMPLING_TEMP, BATCH_SIZE, JOB_ID, CALLBACK_URL, BLOB_TOKEN
 
 set -e
-trap 'curl -s -X POST "$CALLBACK_URL" -H "Content-Type: application/json" -d "{\"jobId\":\"$JOB_ID\",\"stage\":\"failed\",\"error\":\"pipeline_runner exited unexpectedly\"}" || true' ERR
+trap 'curl -s -X POST "$CALLBACK_URL" -H "Content-Type: application/json" -H "x-callback-secret: $CALLBACK_SECRET" -d "{\"jobId\":\"$JOB_ID\",\"stage\":\"failed\",\"error\":\"pipeline_runner exited unexpectedly\"}" || true' ERR
 
 echo "=== Pipeline Runner Starting ==="
 echo "Job ID: $JOB_ID"
@@ -109,6 +109,7 @@ MPNN_COUNT=$(ls /workspace/outputs/mpnn/seqs/*.fa 2>/dev/null | wc -l | tr -d ' 
 echo "=== Sending callback ==="
 curl -s -X POST "$CALLBACK_URL" \
   -H "Content-Type: application/json" \
+  -H "x-callback-secret: $CALLBACK_SECRET" \
   -d "{\"jobId\":\"$JOB_ID\",\"stage\":\"mpnn_complete\",\"rfd3OutputUrl\":\"$RFD3_URL\",\"mpnnOutputUrl\":\"$MPNN_URL\",\"rfd3Count\":$RFD3_COUNT,\"mpnnCount\":$MPNN_COUNT}"
 
 echo "=== Pipeline complete ==="

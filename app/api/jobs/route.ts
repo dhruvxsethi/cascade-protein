@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
     `export JOB_ID="${job._id}"`,
     `export CALLBACK_URL="${callbackUrl}"`,
     `export BLOB_TOKEN="${blobToken}"`,
+    `export CALLBACK_SECRET="${job._id}-${process.env.CRON_SECRET}"`,
     `bash <(curl -fsSL ${process.env.NEXT_PUBLIC_APP_URL}/scripts/pipeline_runner.sh)`,
   ].join('\n')
 

@@ -28,7 +28,10 @@ export async function getAF3Result(predictionName: string): Promise<AF3Result | 
   const res = await fetch(`${AF3_BASE}/predictions/${predictionName}`, {
     headers: { 'Authorization': `Bearer ${AF3_API_KEY}` },
   })
-  if (!res.ok) return null
+  if (!res.ok) {
+    console.error(`AF3 getResult failed for ${predictionName}: ${res.status} ${res.statusText}`)
+    return null
+  }
   const data = await res.json()
   if (data.status !== 'COMPLETE') return null
   return {

@@ -15,17 +15,22 @@ export async function GET(req: NextRequest) {
   const jobs = await Job.find({ stage: 'af3' }).limit(5)
   let totalSubmitted = 0
   let totalCompleted = 0
+  let globalAF3Submissions = 0
+  const MAX_AF3_PER_CRON = 20
 
   for (const job of jobs) {
     const jobIdStr = job._id.toString()
 
-    // Submit up to 20 pending sequences to AF3 (daily server limit)
+    // Submit pending sequences to AF3 (global daily server limit)
+    const remainingSubmitSlots = MAX_AF3_PER_CRON - globalAF3Submissions
+    if (remainingSubmitSlots <= 0) break // global limit reached
+
     const pending = await Design.find({
       jobId: jobIdStr,
       stage: 'mpnn',
-      'scores.mpnnScore': { $lt: 0.80 },
       sequence: { $ne: null },
-    }).limit(20)
+      'meta.af3PredictionName': { $exists: false },
+    }).limit(remainingSubmitSlots)
 
     for (const design of pending) {
       if (!design.sequence) continue
@@ -38,6 +43,7 @@ export async function GET(req: NextRequest) {
           stage: 'af3',
           'meta.af3PredictionName': predName,
         })
+        globalAF3Submissions++
         totalSubmitted++
       } catch (e) {
         console.error('AF3 submit error:', e)
