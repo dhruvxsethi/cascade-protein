@@ -48,8 +48,9 @@ export async function getPodStatus(podId: string): Promise<PodStatus> {
 }
 
 export async function terminatePod(podId: string): Promise<void> {
-  await fetch(`${RUNPOD_BASE}/pods/${podId}/terminate`, {
+  const res = await fetch(`${RUNPOD_BASE}/pods/${podId}/terminate`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RUNPOD_API_KEY}` },
   })
+  if (!res.ok) throw new Error(`RunPod terminate failed: ${await res.text()}`)
 }

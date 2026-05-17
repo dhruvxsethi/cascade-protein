@@ -5,6 +5,7 @@
 #   SAMPLING_TEMP, BATCH_SIZE, JOB_ID, CALLBACK_URL, BLOB_TOKEN
 
 set -e
+trap 'curl -s -X POST "$CALLBACK_URL" -H "Content-Type: application/json" -d "{\"jobId\":\"$JOB_ID\",\"stage\":\"failed\",\"error\":\"pipeline_runner exited unexpectedly\"}" || true' ERR
 
 echo "=== Pipeline Runner Starting ==="
 echo "Job ID: $JOB_ID"
@@ -21,7 +22,7 @@ echo "=== Downloading PDB ==="
 curl -s "$PDB_URL" -o /workspace/inputs/input.pdb
 
 # Calculate batches
-N_BATCHES=$(( ($DESIGN_COUNT + $BATCH_SIZE - 1) / $BATCH_SIZE ))
+N_BATCHES=$(( (${DESIGN_COUNT:-100} + ${BATCH_SIZE:-10} - 1) / ${BATCH_SIZE:-10} ))
 
 # Stage 1: RFDiffusion3
 echo "=== Stage 1: RFDiffusion3 ==="
@@ -86,7 +87,7 @@ echo "=== Uploading results ==="
 RFD3_UPLOAD=$(curl -s \
   --request PUT \
   --header "Authorization: Bearer $BLOB_TOKEN" \
-  --header "x-content-type: application/gzip" \
+  --header "Content-Type: application/gzip" \
   --header "x-cache-control-max-age: 31536000" \
   --data-binary @/workspace/rfd3_outputs.tar.gz \
   "https://blob.vercel-storage.com/${JOB_ID}_rfd3.tar.gz")
@@ -95,7 +96,7 @@ RFD3_URL=$(echo "$RFD3_UPLOAD" | python3 -c "import sys,json; d=json.load(sys.st
 MPNN_UPLOAD=$(curl -s \
   --request PUT \
   --header "Authorization: Bearer $BLOB_TOKEN" \
-  --header "x-content-type: application/gzip" \
+  --header "Content-Type: application/gzip" \
   --header "x-cache-control-max-age: 31536000" \
   --data-binary @/workspace/mpnn_outputs.tar.gz \
   "https://blob.vercel-storage.com/${JOB_ID}_mpnn.tar.gz")
