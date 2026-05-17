@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface JobStats {
   stage: string
@@ -41,10 +42,25 @@ function NavBar() {
 }
 
 export default function PipelineProgress({ jobId }: { jobId: string }) {
+  const router = useRouter()
   const [job, setJob] = useState<JobStats | null>(null)
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now())
   const [secondsSince, setSecondsSince] = useState(0)
   const [countdown, setCountdown] = useState(10)
+  const [cancelling, setCancelling] = useState(false)
+  const [confirmCancel, setConfirmCancel] = useState(false)
+
+  const handleCancel = async () => {
+    if (!confirmCancel) { setConfirmCancel(true); return }
+    setCancelling(true)
+    try {
+      await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST' })
+      router.push('/')
+    } catch {
+      setCancelling(false)
+      setConfirmCancel(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -253,6 +269,52 @@ export default function PipelineProgress({ jobId }: { jobId: string }) {
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-xl p-4">
             <p className="text-red-400 text-sm font-medium">Error</p>
             <p className="text-red-300/80 text-sm mt-1">{job.errorMessage}</p>
+          </div>
+        )}
+
+        {/* Cron / how it works */}
+        {(job.stage === 'af3' || job.stage === 'mpnn') && (
+          <div className="mb-6 bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <p className="text-zinc-400 text-xs font-semibold uppercase tracking-wide mb-2">How the pipeline progresses</p>
+            <ul className="text-zinc-500 text-xs space-y-1.5">
+              <li>⬡ <strong className="text-zinc-400">RFDiffusion3 + ProteinMPNN</strong> run on RunPod GPU — results arrive via callback when done</li>
+              <li>◈ <strong className="text-zinc-400">AlphaFold3</strong> predictions are submitted to the AF3 Server API and polled automatically</li>
+              <li>⏱ <strong className="text-zinc-400">Cron job</strong> checks for new AF3 results once daily (upgrade to Vercel Pro for every 5 min)</li>
+              <li>📊 This page refreshes every 10 seconds to show the latest counts</li>
+            </ul>
+          </div>
+        )}
+
+        {/* Cancel button */}
+        {!isComplete && !isFailed && (
+          <div className="flex flex-col items-center gap-2 mb-6">
+            {confirmCancel ? (
+              <div className="w-full bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
+                <p className="text-red-400 text-sm font-medium mb-3">Are you sure? This will terminate the GPU pod and stop the run.</p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={handleCancel}
+                    disabled={cancelling}
+                    className="bg-red-500 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-red-400 disabled:opacity-50 transition-colors"
+                  >
+                    {cancelling ? 'Cancelling...' : 'Yes, cancel run'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmCancel(false)}
+                    className="bg-zinc-800 text-zinc-300 px-5 py-2 rounded-lg text-sm font-medium hover:bg-zinc-700 transition-colors"
+                  >
+                    Keep running
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={handleCancel}
+                className="text-zinc-600 hover:text-red-400 text-sm transition-colors"
+              >
+                Cancel run
+              </button>
+            )}
           </div>
         )}
 
