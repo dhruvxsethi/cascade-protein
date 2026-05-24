@@ -33,40 +33,45 @@ export async function POST(req: NextRequest) {
   })
 
   const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/jobs/${job._id}/callback`
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN!
+  const scriptUrl = `${process.env.NEXT_PUBLIC_APP_URL}/scripts/pipeline_runner.sh`
 
-  const startScript = [
-    `export PDB_URL="${pdbBlobUrl}"`,
-    `export DESIGN_COUNT="${designCount}"`,
-    `export CFG_SCALE="${cfg_scale}"`,
-    `export STEP_SCALE="${step_scale}"`,
-    `export NUM_TIMESTEPS="${num_timesteps}"`,
-    `export SAMPLING_TEMP="${sampling_temp}"`,
-    `export BATCH_SIZE="10"`,
-    `export JOB_ID="${job._id}"`,
-    `export CALLBACK_URL="${callbackUrl}"`,
-    `export BLOB_TOKEN="${blobToken}"`,
-    `export CALLBACK_SECRET="${job._id}-${process.env.CRON_SECRET}"`,
-    `bash <(curl -fsSL ${process.env.NEXT_PUBLIC_APP_URL}/scripts/pipeline_runner.sh)`,
-  ].join('\n')
+  // All pipeline variables passed as proper env vars — container runs the script via dockerArgs
+  const env = {
+    PDB_URL: pdbBlobUrl,
+    DESIGN_COUNT: String(designCount),
+    CFG_SCALE: String(cfg_scale),
+    STEP_SCALE: String(step_scale),
+    NUM_TIMESTEPS: String(num_timesteps),
+    SAMPLING_TEMP: String(sampling_temp),
+    BATCH_SIZE: '10',
+    JOB_ID: String(job._id),
+    CALLBACK_URL: callbackUrl,
+    BLOB_TOKEN: process.env.BLOB_READ_WRITE_TOKEN!,
+    CALLBACK_SECRET: `${job._id}-${process.env.CRON_SECRET}`,
+    SCRIPT_URL: scriptUrl,
+  }
 
   try {
     const podId = await createRunpodPod({
       name: `pipeline-${job._id}`,
       imageName: 'runpod/pytorch:2.2.0-py3.10-cuda12.1.1-devel-ubuntu22.04',
-      gpuTypeId: 'NVIDIA GeForce RTX 3090',
-      containerDiskInGb: 20,
-      volumeInGb: 50,
-      startScript,
+      gpuTypeIds: [
+        'NVIDIA GeForce RTX 3090',
+        'NVIDIA GeForce RTX 4090',
+        'NVIDIA RTX A5000',
+        'NVIDIA RTX A6000',
+        'NVIDIA A40',
+      ],
+      containerDiskInGb: 50,
+      env,
     })
 
     await Job.findByIdAndUpdate(job._id, { runpodJobId: podId, stage: 'rfd3' })
   } catch (err) {
-    await Job.findByIdAndUpdate(job._id, {
-      stage: 'failed',
-      errorMessage: err instanceof Error ? err.message : String(err),
-    })
-    return NextResponse.json({ error: 'Failed to start RunPod job' }, { status: 500 })
+    const errMsg = err instanceof Error ? err.message : String(err)
+    console.error('RunPod error:', errMsg)
+    await Job.findByIdAndUpdate(job._id, { stage: 'failed', errorMessage: errMsg })
+    return NextResponse.json({ error: errMsg }, { status: 500 })
   }
 
   return NextResponse.json({ jobId: job._id.toString() })

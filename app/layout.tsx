@@ -10,7 +10,7 @@ const clerkReady = clerkKey.startsWith('pk_') && !clerkKey.includes('placeholder
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const html = (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} dark`}>
-      <body className="font-sans bg-[#050507] text-zinc-100 antialiased">{children}</body>
+      <body className="font-sans antialiased" style={{ background: '#080C14', color: '#E2E8F0' }}>{children}</body>
     </html>
   )
   if (clerkReady) {

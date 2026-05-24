@@ -1,13 +1,12 @@
 const RUNPOD_API_KEY = process.env.RUNPOD_API_KEY!
-const RUNPOD_BASE = 'https://rest.runpod.io/v1'
+const GRAPHQL_URL = `https://api.runpod.io/graphql?api_key=${RUNPOD_API_KEY}`
 
 interface CreatePodOptions {
   name: string
   imageName: string
-  gpuTypeId: string
+  gpuTypeIds: string[]
   containerDiskInGb: number
-  volumeInGb: number
-  startScript: string
+  env: Record<string, string>
 }
 
 export interface PodStatus {
@@ -16,41 +15,64 @@ export interface PodStatus {
   runtime: { gpus: Array<{ id: string }> } | null
 }
 
-export async function createRunpodPod(opts: CreatePodOptions): Promise<string> {
-  const res = await fetch(`${RUNPOD_BASE}/pods`, {
+async function gql(query: string, variables: Record<string, unknown>) {
+  const res = await fetch(GRAPHQL_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${RUNPOD_API_KEY}`,
-    },
-    body: JSON.stringify({
-      name: opts.name,
-      imageName: opts.imageName,
-      gpuTypeId: opts.gpuTypeId,
-      containerDiskInGb: opts.containerDiskInGb,
-      volumeInGb: opts.volumeInGb,
-      startJupyter: false,
-      startSsh: true,
-      env: [{ key: 'START_SCRIPT', value: opts.startScript }],
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables }),
   })
-  if (!res.ok) throw new Error(`RunPod create failed: ${await res.text()}`)
-  const data = await res.json()
-  return data.id
+  const json = await res.json()
+  if (json.errors) throw new Error(JSON.stringify(json.errors))
+  return json.data
+}
+
+export async function createRunpodPod(opts: CreatePodOptions): Promise<string> {
+  const envArray = Object.entries(opts.env).map(([key, value]) => ({ key, value }))
+
+  // Try each GPU type until one has availability
+  for (const gpuTypeId of opts.gpuTypeIds) {
+    try {
+      const data = await gql(`
+        mutation CreatePod($input: PodFindAndDeployOnDemandInput!) {
+          podFindAndDeployOnDemand(input: $input) { id }
+        }
+      `, {
+        input: {
+          name: opts.name,
+          imageName: opts.imageName,
+          gpuTypeId,
+          gpuCount: 1,
+          containerDiskInGb: opts.containerDiskInGb,
+          dockerArgs: 'bash -c "bash <(curl -fsSL $SCRIPT_URL)"',
+          env: envArray,
+          cloudType: 'SECURE',
+        },
+      })
+      return data.podFindAndDeployOnDemand.id
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const isUnavailable = msg.includes('no instance') || msg.includes('No instance') ||
+        msg.includes('available') || msg.includes('resources') || msg.includes('machine')
+      if (isUnavailable) continue
+      throw err
+    }
+  }
+  throw new Error('No GPU instances available across all types. Try again in a few minutes.')
 }
 
 export async function getPodStatus(podId: string): Promise<PodStatus> {
-  const res = await fetch(`${RUNPOD_BASE}/pods/${podId}`, {
-    headers: { 'Authorization': `Bearer ${RUNPOD_API_KEY}` },
-  })
-  if (!res.ok) throw new Error(`RunPod status failed: ${await res.text()}`)
-  return res.json()
+  const data = await gql(`
+    query GetPod($id: String!) {
+      pod(input: { podId: $id }) { id desiredStatus runtime { gpus { id } } }
+    }
+  `, { id: podId })
+  return data.pod
 }
 
 export async function terminatePod(podId: string): Promise<void> {
-  const res = await fetch(`${RUNPOD_BASE}/pods/${podId}/terminate`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${RUNPOD_API_KEY}` },
-  })
-  if (!res.ok) throw new Error(`RunPod terminate failed: ${await res.text()}`)
+  await gql(`
+    mutation TerminatePod($id: String!) {
+      podTerminate(input: { podId: $id })
+    }
+  `, { id: podId })
 }

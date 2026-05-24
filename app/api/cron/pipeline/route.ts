@@ -78,9 +78,13 @@ export async function GET(req: NextRequest) {
       jobId: jobIdStr,
       stage: { $in: ['rfd3', 'mpnn', 'af3'] },
     })
+    // Only mark complete if we actually have design results — prevents
+    // premature completion when Boltz-2 is still running on-pod and
+    // hasn't sent the final callback yet (design docs don't exist yet).
+    const totalDesigns = await Design.countDocuments({ jobId: jobIdStr })
 
     await Job.findByIdAndUpdate(job._id, {
-      stage: remaining === 0 ? 'complete' : 'af3',
+      stage: remaining === 0 && totalDesigns > 0 ? 'complete' : 'af3',
       'stats.af3Validated': validatedCount,
       'stats.bestPlddt': bestPlddt,
     })
